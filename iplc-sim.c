@@ -17,8 +17,8 @@
 void iplc_sim_init(int index, int blocksize, int assoc);
 
 // Cache simulator functions
-void iplc_sim_LRU_replace_on_miss(int index, int tag);
-void iplc_sim_LRU_update_on_hit(int index, int assoc);
+void iplc_sim_LRU_replace_on_miss(int index, int tag); *
+void iplc_sim_LRU_update_on_hit(int index, int assoc); *
 int iplc_sim_trap_address(unsigned int address);
 
 // Pipeline functions
@@ -358,31 +358,66 @@ void iplc_sim_process_pipeline_rtype(char *instruction, int dest_reg, int reg1, 
 void iplc_sim_process_pipeline_lw(int dest_reg, int base_reg, unsigned int data_address)
 {
     /* You must implement this function */
+    iplc_sim_push_pipeline_stage();
+
+    pipeline[MEM].itype = LW;
+
+    pipeline[MEM].stage.lw.data_address = data_address;
+    pipeline[MEM].stage.lw.dest_reg = dest_reg;
+    pipeline[MEM].stage.base_reg = base_reg;
 }
 
 void iplc_sim_process_pipeline_sw(int src_reg, int base_reg, unsigned int data_address)
 {
     /* You must implement this function */
+    iplc_sim_push_pipeline_stage();
+
+    pipeline[MEM].itype = SW;
+
+    pipeline[MEM].stage.sw.data_address = data_address;
+    pipeline[MEM].stage.sw.src_reg = src_reg;
+    pipeline[MEM].stage.sw.base_reg = base_reg;
 }
 
 void iplc_sim_process_pipeline_branch(int reg1, int reg2)
 {
     /* You must implement this function */
+    iplc_sim_push_pipeline_stage();
+
+    pipeline[DECODE].itype = BRANCH;
+
+    pipeline[DECODE].stage.branch.reg1 = reg1;
+    pipeline[DECODE].stage.branch.reg2 = reg2;
 }
 
 void iplc_sim_process_pipeline_jump(char *instruction)
 {
     /* You must implement this function */
+    iplc_sim_push_pipeline_stage();
+
+    pipeline[ALU].itype = JUMP;
+
+    strcpy(pipeline[ALU].stage.jump.instruction, instruction);
 }
 
 void iplc_sim_process_pipeline_syscall()
 {
     /* You must implement this function */
+    iplc_sim_push_pipeline_stage();
+
+    pipeline[WRITEBACK].itype = SYSCALL;
 }
 
 void iplc_sim_process_pipeline_nop()
 {
     /* You must implement this function */
+    iplc_sim_push_pipeline_stage();
+    
+    pipeline[FETCH].itype = NOP;
+    pipeline[DECODE].itype = NOP;
+    pipeline[ALU].itype = NOP;
+    pipeline[MEM].itype = NOP;
+    pipeline[WRITEBACK].itype = NOP;
 }
 
 /************************************************************************************************/
