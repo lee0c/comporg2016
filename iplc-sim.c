@@ -17,8 +17,8 @@
 void iplc_sim_init(int index, int blocksize, int assoc);
 
 // Cache simulator functions
-void iplc_sim_LRU_replace_on_miss(int index, int tag); *
-void iplc_sim_LRU_update_on_hit(int index, int assoc); *
+void iplc_sim_LRU_replace_on_miss(int index, int tag);
+void iplc_sim_LRU_update_on_hit(int index, int assoc);
 int iplc_sim_trap_address(unsigned int address);
 
 // Pipeline functions
