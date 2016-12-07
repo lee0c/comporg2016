@@ -193,10 +193,21 @@ void iplc_sim_init(int index, int blocksize, int assoc)
 void iplc_sim_LRU_replace_on_miss(int index, int tag)
 {
     int i=0, j=0;
-    
+    //Set i equal to the 0th place because it's the LRU
+    i = cache[index].replacement[0];
     /* Note: item 0 is the least recently used cache slot -- so replace it */
-    
-    /* percolate everything up */
+ 
+     /* percolate everything up */
+    for(j = 1; j < cache_assoc; ++j){
+      cache[index].replacement[j-1] = cache[index].replacement[j];
+    }
+ 
+    //Put the new value at the top of the replacement file (cache_assoc-1)
+    cache[index].replacement[cache_assoc-1] = i;
+ 
+    //Turn on the valid bit and tag for where this is stored now
+    cache[index].assoc[i].vb = 1;
+    cache[index].assoc[i].tag = tag;
 }
 
 /*
