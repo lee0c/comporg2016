@@ -133,6 +133,20 @@ enum pipeline_stages {FETCH, DECODE, ALU, MEM, WRITEBACK};
 
 pipeline_t pipeline[MAX_STAGES];
 
+/*
+ * Extract the least significant bit from the value pointed to by bitbucket.
+ * Remove this bit from the pointed-to value and return it.
+ */
+uint32_t pop_bits(uint32_t *bitbucket)
+{   
+    uint32_t lsb = *bitbucket & 1;
+    *bitbucket = *bitbucket >> 1;
+    return lsb;
+}
+
+/*
+ * Print out a 32-bit binary string
+ */
 void print_b32(unsigned int s)
 {
     uint32_t binaryString[32];
