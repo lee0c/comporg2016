@@ -242,6 +242,56 @@ int iplc_sim_trap_address(unsigned int address)
     int tag=0;
     int hit=0;
     
+    /* PSEUDOCODE
+     * Use address to compute index and tag
+     *      [tag    - length = 32 - cache_index - cache_blockoffsetbits]
+     *      [index  - length = cache_index]
+     *      [ignore - length = cache_blockoffsetbits]
+     * for cache[index].replacement[i = cache_assoc-1 -> 0]:
+     *      if assoc[replacement[i]].vb == 0:
+     *          // there's no more valid data to look at
+     *          break
+     *      if assoc[replacement[i]].tag == tag:
+     *          // address found!
+     *          LRU-update (index, assoc)
+     *          // where assoc is replacement[i]
+     *          return hit = 1
+     * // the address was never found
+     * LRU_replace (index, tag)
+     * return hit = 0  
+     */
+
+    unsigned int index_mask = 1;
+    index_mask = index_mask << cache_index;
+    index_mask = index_mask - 1;
+    index_mask = index_mask << (cache_blockoffsetbits - cache_index);
+    index = address & index_mask;
+    index = index >> (cache_blockoffsetbits - cache_index);
+
+    unsigned int tag_mask = 1;
+    tag_mask = tag_mask << (32 - cache_blockoffsetbits);
+    tag_mask = tag_mask - 1;
+    tag_mask = tag_mask << (cache_blockoffsetbits);
+    tag = address & tag_mask;
+    tag = tag >> (cache_blockoffsetbits);
+
+    for (i=cache_assoc-1; i>=0; i++) {
+        if (cache[index].assoc[ cache[index].replacement[i] ].vb == 0) {
+            // since this block isn't valid, none of the less
+            // recent blocks will be valid, and we can stop looking
+            break;
+        }
+
+        if (cache[index].assoc[ cache[index].replacement[i] ].tag == tag) {
+            // we found the address we were looking for!
+            iplc_sim_LRU_update_on_hit( index, cache[index].replacement[i] );
+            hit = 1;
+            return hit;
+        }
+    }
+
+    iplc_sim_LRU_replace_on_miss(index, tag);
+
     /* expects you to return 1 for hit, 0 for miss */
     return hit;
 }
@@ -313,10 +363,7 @@ void iplc_sim_dump_pipeline()
  * Then push the contents of our various pipeline stages through the pipeline.
  */
 void iplc_sim_push_pipeline_stage()
-{
-    int i;
-    int data_hit=1;
-    
+{    
     /* 1. Count WRITEBACK stage is "retired" -- This I'm giving you */
     if (pipeline[WRITEBACK].instruction_address) {
         instruction_count++;
@@ -356,6 +403,7 @@ void iplc_sim_push_pipeline_stage()
         // ** I added the rest of this if-body
         int hitormiss, lwaddress;
         lwaddress = pipeline[MEM].instruction_address;
+        printf("%d", lwaddress);
         hitormiss = iplc_sim_trap_address(lwaddress); // ** 1 for hit, 0 for miss
         if (hitormiss == 0) {           // ** 10 clock cycle stall penalty if a miss
             inserted_nop += 10;
@@ -367,6 +415,8 @@ void iplc_sim_push_pipeline_stage()
 
         // ** If the instruction at the ALU stage is BRANCH
         if (pipeline[ALU].itype == BRANCH) {
+
+            pipeline_cycles += inserted_nop;
 
             if (pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.branch.reg1 ||
                 pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.branch.reg2) {
@@ -703,6 +753,8 @@ int main()
     
     printf("Enter Cache Size (index), Blocksize and Level of Assoc \n");
     scanf( "%d %d %d", &index, &blocksize, &assoc );
+
+
     
     printf("Enter Branch Prediction: 0 (NOT taken), 1 (TAKEN): ");
     scanf("%d", &branch_predict_taken );
