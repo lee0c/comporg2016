@@ -454,6 +454,8 @@ void iplc_sim_push_pipeline_stage()
                 inserted_nop += 1;
             }
         }
+     
+     pipeline_cycles += inserted_nop;
     }
     
     /* 4. Check for SW mem acess and data miss .. add delay cycles if needed */
