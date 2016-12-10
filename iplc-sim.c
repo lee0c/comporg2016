@@ -70,7 +70,7 @@ unsigned int branch_predict_taken=0;
 unsigned int branch_count=0;
 unsigned int correct_branch_predictions=0;
 
-unsigned int debug=0;
+unsigned int debug=1;
 unsigned int dump_pipeline=1;
 
 enum instruction_type {NOP, RTYPE, LW, SW, BRANCH, JUMP, JAL, SYSCALL};
@@ -132,6 +132,22 @@ typedef struct pipeline
 enum pipeline_stages {FETCH, DECODE, ALU, MEM, WRITEBACK};
 
 pipeline_t pipeline[MAX_STAGES];
+
+void print_b32(unsigned int s)
+{
+    uint32_t binaryString[32];
+    
+    int i;
+
+    for (i = 0; i < 32; i++) {
+        binaryString[i] = pop_bits(&s);
+    }
+    
+    for (i = 31; i >= 0; i--) {
+        printf("%d", binaryString[i]);
+    }
+    printf("\n");
+}
 
 /************************************************************************************************/
 /* Cache Functions ******************************************************************************/
@@ -242,6 +258,56 @@ int iplc_sim_trap_address(unsigned int address)
     int tag=0;
     int hit=0;
     
+    /* PSEUDOCODE
+     * Use address to compute index and tag
+     *      [tag    - length = 32 - cache_index - cache_blockoffsetbits]
+     *      [index  - length = cache_index]
+     *      [ignore - length = cache_blockoffsetbits]
+     * for cache[index].replacement[i = cache_assoc-1 -> 0]:
+     *      if assoc[replacement[i]].vb == 0:
+     *          // there's no more valid data to look at
+     *          break
+     *      if assoc[replacement[i]].tag == tag:
+     *          // address found!
+     *          LRU-update (index, assoc)
+     *          // where assoc is replacement[i]
+     *          return hit = 1
+     * // the address was never found
+     * LRU_replace (index, tag)
+     * return hit = 0  
+     */
+
+    unsigned int index_mask = 1;
+    index_mask = index_mask << cache_index;
+    index_mask = index_mask - 1;
+    index_mask = index_mask << (cache_blockoffsetbits - cache_index);
+    index = address & index_mask;
+    index = index >> (cache_blockoffsetbits - cache_index);
+
+    unsigned int tag_mask = 1;
+    tag_mask = tag_mask << (32 - cache_blockoffsetbits);
+    tag_mask = tag_mask - 1;
+    tag_mask = tag_mask << (cache_blockoffsetbits);
+    tag = address & tag_mask;
+    tag = tag >> (cache_blockoffsetbits);
+
+    for (i=cache_assoc-1; i>=0; i++) {
+        if (cache[index].assoc[ cache[index].replacement[i] ].vb == 0) {
+            // since this block isn't valid, none of the less
+            // recent blocks will be valid, and we can stop looking
+            break;
+        }
+
+        if (cache[index].assoc[ cache[index].replacement[i] ].tag == tag) {
+            // we found the address we were looking for!
+            iplc_sim_LRU_update_on_hit( index, cache[index].replacement[i] );
+            hit = 1;
+            return hit;
+        }
+    }
+
+    iplc_sim_LRU_replace_on_miss(index, tag);
+
     /* expects you to return 1 for hit, 0 for miss */
     return hit;
 }
@@ -313,10 +379,7 @@ void iplc_sim_dump_pipeline()
  * Then push the contents of our various pipeline stages through the pipeline.
  */
 void iplc_sim_push_pipeline_stage()
-{
-    int i;
-    int data_hit=1;
-    
+{    
     /* 1. Count WRITEBACK stage is "retired" -- This I'm giving you */
     if (pipeline[WRITEBACK].instruction_address) {
         instruction_count++;
@@ -328,6 +391,23 @@ void iplc_sim_push_pipeline_stage()
     /* 2. Check for BRANCH and correct/incorrect Branch Prediction */
     if (pipeline[DECODE].itype == BRANCH) {
         int branch_taken = 0;
+
+        // ** if pipeline[FETCH].instruction_address is more than four away from
+        // ** pipeline[DECODE].instruction_address, then branch was taken
+        // ** (from piazza @409)
+        if (abs(pipeline[FETCH].instruction_address - pipeline[DECODE].instruction_address) > 4) {
+            branch_taken = 1;
+        } 
+
+        // ** if predict not taken, and it is actually taken, then one extra clock
+        // ** cycle is taken
+        // ** (from slide 69 of chapter4 ppt)
+        // ** I'm not totally sure that it should be the same amount of delay for both cases
+        if (branch_predict_taken != branch_taken) {
+            pipeline_cycles += 1;
+        }
+
+        
     }
     
     /* 3. Check for LW delays due to use in ALU stage and if data hit/miss
@@ -335,14 +415,91 @@ void iplc_sim_push_pipeline_stage()
      */
     if (pipeline[MEM].itype == LW) {
         int inserted_nop = 0;
+
+        // ** I added the rest of this if-body
+        int hitormiss, lwaddress;
+        lwaddress = pipeline[MEM].instruction_address;
+        printf("%d", lwaddress);
+        hitormiss = iplc_sim_trap_address(lwaddress); // ** 1 for hit, 0 for miss
+        if (hitormiss == 0) {           // ** 10 clock cycle stall penalty if a miss
+            inserted_nop += 10;
+        }
+
+        // ** If the dest_reg of this LW is used in the instruction at the ALU stage,
+        // ** then add pipeline cycles b/c can't forward immediately w/ LW
+        // ** There are three cases: branch, sw, and rtype.
+
+        // ** If the instruction at the ALU stage is BRANCH
+        if (pipeline[ALU].itype == BRANCH) {
+
+            pipeline_cycles += inserted_nop;
+
+            if (pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.branch.reg1 ||
+                pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.branch.reg2) {
+
+                // ** not sure if this debug should print here
+                printf("DEBUG: LW STALL due to use in ALU stage with data MISS at instruction 0x%x\n",
+                   pipeline[MEM].instruction_address);
+
+                inserted_nop += 1;
+            }
+
+        // ** If the instruction at the ALU stage is SW
+        } else if (pipeline[ALU].itype == SW) {
+
+            if (pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.sw.src_reg) {
+
+                // ** not sure if this debug should print here
+                printf("DEBUG: LW STALL due to use in ALU stage with data MISS at instruction 0x%x\n",
+                   pipeline[MEM].instruction_address);
+
+                inserted_nop += 1;
+            }
+
+        // ** If the instruction at the ALU stage is SW
+        } else if (pipeline[ALU].itype == RTYPE) {
+
+            if (pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.rtype.reg1 ||
+                pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.rtype.reg2_or_constant ||
+                pipeline[MEM].stage.lw.dest_reg == pipeline[ALU].stage.rtype.dest_reg) {
+
+                // ** not sure if this debug should print here
+                printf("DEBUG: LW STALL due to use in ALU stage with data MISS at instruction 0x%x\n",
+                   pipeline[MEM].instruction_address);
+
+                inserted_nop += 1;
+            }
+        }
+     
+     pipeline_cycles += inserted_nop;
     }
     
     /* 4. Check for SW mem acess and data miss .. add delay cycles if needed */
     if (pipeline[MEM].itype == SW) {
+
+        // ** I added this if-body
+        int hitormiss, swaddress;
+        swaddress = pipeline[MEM].instruction_address;
+        hitormiss = iplc_sim_trap_address(swaddress); // ** 1 for hit, 0 for miss
+        if (hitormiss == 0) {           // ** 10 clock cycle stall penalty if a miss
+            pipeline_cycles += 10;
+        }
+
     }
     
     /* 5. Increment pipe_cycles 1 cycle for normal processing */
+
+    // ** I added this it should be fine
+    pipeline_cycles += 1;
+
     /* 6. push stages thru MEM->WB, ALU->MEM, DECODE->ALU, FETCH->ALU */
+
+    // ** I added these; I think this is what the above comement is asking
+    pipeline[WRITEBACK] = pipeline[MEM];
+    pipeline[MEM] = pipeline[ALU];
+    pipeline[ALU] = pipeline[DECODE];
+    pipeline[DECODE] = pipeline[FETCH];
+
     
     // 7. This is a give'me -- Reset the FETCH stage to NOP via bezero */
     bzero(&(pipeline[FETCH]), sizeof(pipeline_t));
@@ -375,7 +532,7 @@ void iplc_sim_process_pipeline_lw(int dest_reg, int base_reg, unsigned int data_
 
     pipeline[MEM].stage.lw.data_address = data_address;
     pipeline[MEM].stage.lw.dest_reg = dest_reg;
-    pipeline[MEM].stage.base_reg = base_reg;
+    pipeline[MEM].stage.lw.base_reg = base_reg;
 }
 
 void iplc_sim_process_pipeline_sw(int src_reg, int base_reg, unsigned int data_address)
@@ -476,8 +633,11 @@ void iplc_sim_parse_instruction(char *buffer)
         exit(-1);
     }
     
+    printf("About to call trap_address() with address %u or:\n", instruction_address);
+    print_b32(instruction_address);
     instruction_hit = iplc_sim_trap_address( instruction_address );
-    
+    printf("Finished calling trap_address()\n");
+
     // if a MISS, then push current instruction thru pipeline
     if (!instruction_hit) {
         // need to subtract 1, since the stage is pushed once more for actual instruction processing
@@ -488,6 +648,7 @@ void iplc_sim_parse_instruction(char *buffer)
         
         for (i = pipeline_cycles, j = pipeline_cycles; i < j + CACHE_MISS_DELAY - 1; i++)
             iplc_sim_push_pipeline_stage();
+
     }
     else
         printf("INST HIT:\t Address 0x%x \n", instruction_address);
@@ -614,6 +775,8 @@ int main()
     
     printf("Enter Cache Size (index), Blocksize and Level of Assoc \n");
     scanf( "%d %d %d", &index, &blocksize, &assoc );
+
+
     
     printf("Enter Branch Prediction: 0 (NOT taken), 1 (TAKEN): ");
     scanf("%d", &branch_predict_taken );
@@ -622,8 +785,10 @@ int main()
     
     while (fgets(buffer, 80, trace_file) != NULL) {
         iplc_sim_parse_instruction(buffer);
+        printf("About to start dump_pipeline()\n");
         if (dump_pipeline)
             iplc_sim_dump_pipeline();
+        printf("Got past dump_pipeline()\n");
     }
     
     iplc_sim_finalize();
