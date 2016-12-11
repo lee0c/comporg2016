@@ -342,7 +342,7 @@ int iplc_sim_trap_address(unsigned int address)
             break;
         }
 
-        if (cache[index].assoc[ cache[index].replacement[i] ].tag == tag) {
+        if (cache[index].assoc[ i ].tag == tag) {
             //printf("address found, updating cache\n");
             // we found the address we were looking for!
             iplc_sim_LRU_update_on_hit( index, cache[index].replacement[i] );
@@ -435,7 +435,7 @@ void iplc_sim_push_pipeline_stage()
 {    
     /* 1. Count WRITEBACK stage is "retired" -- This I'm giving you */
     if (pipeline[WRITEBACK].instruction_address) {
-        instruction_count++;
+        
         if (debug)
             printf("DEBUG: Retired Instruction at 0x%x, Type %d, at Time %u \n",
                    pipeline[WRITEBACK].instruction_address, pipeline[WRITEBACK].itype, pipeline_cycles);
@@ -587,6 +587,7 @@ void iplc_sim_push_pipeline_stage()
  */
 void iplc_sim_process_pipeline_rtype(char *instruction, int dest_reg, int reg1, int reg2_or_constant)
 {
+    instruction_count++;
     /* This is an example of what you need to do for the rest */
     iplc_sim_push_pipeline_stage();
     
@@ -601,6 +602,7 @@ void iplc_sim_process_pipeline_rtype(char *instruction, int dest_reg, int reg1, 
 
 void iplc_sim_process_pipeline_lw(int dest_reg, int base_reg, unsigned int data_address)
 {
+    instruction_count++;
     /* You must implement this function */
     iplc_sim_push_pipeline_stage();
 
@@ -613,6 +615,7 @@ void iplc_sim_process_pipeline_lw(int dest_reg, int base_reg, unsigned int data_
 
 void iplc_sim_process_pipeline_sw(int src_reg, int base_reg, unsigned int data_address)
 {
+    instruction_count++;
     /* You must implement this function */
     iplc_sim_push_pipeline_stage();
 
@@ -625,6 +628,7 @@ void iplc_sim_process_pipeline_sw(int src_reg, int base_reg, unsigned int data_a
 
 void iplc_sim_process_pipeline_branch(int reg1, int reg2)
 {
+    instruction_count++;
     /* You must implement this function */
     iplc_sim_push_pipeline_stage();
 
@@ -636,6 +640,7 @@ void iplc_sim_process_pipeline_branch(int reg1, int reg2)
 
 void iplc_sim_process_pipeline_jump(char *instruction)
 {
+    instruction_count++;
     /* You must implement this function */
     iplc_sim_push_pipeline_stage();
 
@@ -646,6 +651,7 @@ void iplc_sim_process_pipeline_jump(char *instruction)
 
 void iplc_sim_process_pipeline_syscall()
 {
+    instruction_count++;
     /* You must implement this function */
     iplc_sim_push_pipeline_stage();
 
@@ -654,6 +660,7 @@ void iplc_sim_process_pipeline_syscall()
 
 void iplc_sim_process_pipeline_nop()
 {
+    instruction_count++;
     /* You must implement this function */
     iplc_sim_push_pipeline_stage();
     
@@ -693,9 +700,7 @@ unsigned int iplc_sim_parse_reg(char *reg_str)
  * Don't touch this function.  It is for parsing the instruction stream.
  */
 void iplc_sim_parse_instruction(char *buffer)
-{
-        instruction_count++;  
- 
+{ 
     int instruction_hit = 0;
     int i=0, j=0;
     int src_reg=0;
