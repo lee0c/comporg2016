@@ -287,8 +287,8 @@ void iplc_sim_LRU_update_on_hit(int index, int assoc)
  */
 int iplc_sim_trap_address(unsigned int address)
 {
-    int i=0, index=0;
-    int tag=0;
+    unsigned int i=0, index=0;
+    unsigned int tag=0;
     int hit=0;
     
     /* PSEUDOCODE
@@ -324,9 +324,11 @@ int iplc_sim_trap_address(unsigned int address)
     tag = address & tag_mask;
     tag = tag >> (cache_blockoffsetbits);
 
-    printf("Tag: %d\nIndex: %d\n", tag, index);
+    printf("Tag: %u\nIndex: %u\n", tag, index);
 
-    for (i=cache_assoc-1; i>=0; i++) {
+    for (i=cache_assoc-1; i>=0; i--) {
+
+        printf("i=%u\nreplacement[i]=%u\n", i, cache[index].replacement[i]);
 
         if (cache[index].assoc[ cache[index].replacement[i] ].vb == 0) {
             printf("vb == 0, breaking loop\n");
@@ -343,9 +345,12 @@ int iplc_sim_trap_address(unsigned int address)
             hit = 1;
             return hit;
         }
+
+        printf("end of loop body\n");
     }
 
     printf("address not found, replacing cache\n");
+    fflush(stdout);
     iplc_sim_LRU_replace_on_miss(index, tag);
     print_cache();
 
@@ -458,10 +463,14 @@ void iplc_sim_push_pipeline_stage()
         int inserted_nop = 0;
 
         // ** I added the rest of this if-body
-        int hitormiss, lwaddress;
+        unsigned int hitormiss, lwaddress;
         lwaddress = pipeline[MEM].instruction_address;
-        printf("%d", lwaddress);
+
+        printf("About to call trap_address() from push_pipeline() with address %u or:\n", lwaddress);
+        print_b32(lwaddress);
         hitormiss = iplc_sim_trap_address(lwaddress); // ** 1 for hit, 0 for miss
+        printf("Finished calling trap_address() from push_pipeline() \n\n");
+
         if (hitormiss == 0) {           // ** 10 clock cycle stall penalty if a miss
             inserted_nop += 10;
         }
@@ -519,9 +528,14 @@ void iplc_sim_push_pipeline_stage()
     if (pipeline[MEM].itype == SW) {
 
         // ** I added this if-body
-        int hitormiss, swaddress;
+        unsigned int hitormiss, swaddress;
         swaddress = pipeline[MEM].instruction_address;
+
+        printf("About to call trap_address() from push_pipeline() with address %u or:\n", swaddress);
+        print_b32(swaddress);
         hitormiss = iplc_sim_trap_address(swaddress); // ** 1 for hit, 0 for miss
+        printf("Finished calling trap_address() from push_pipeline()\n\n");
+
         if (hitormiss == 0) {           // ** 10 clock cycle stall penalty if a miss
             pipeline_cycles += 10;
         }
