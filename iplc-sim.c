@@ -324,35 +324,36 @@ int iplc_sim_trap_address(unsigned int address)
     tag = address & tag_mask;
     tag = tag >> (cache_blockoffsetbits);
 
-    printf("Tag: %u\nIndex: %u\n", tag, index);
+    //printf("Tag: %u\nIndex: %u\n", tag, index);
 
-    for (i=cache_assoc-1; i>=0; i--) {
+    for (i=cache_assoc-1; i>0; i--) {
 
-        printf("i=%u\nreplacement[i]=%u\n", i, cache[index].replacement[i]);
+        //printf("FOR LOOPS DON'T WORK\n");
+
+        //printf("i=%u\nreplacement[i]=%u\n", i, cache[index].replacement[i]);
 
         if (cache[index].assoc[ cache[index].replacement[i] ].vb == 0) {
-            printf("vb == 0, breaking loop\n");
+            //printf("vb == 0, breaking loop\n");
             // since this block isn't valid, none of the less
             // recent blocks will be valid, and we can stop looking
             break;
         }
 
         if (cache[index].assoc[ cache[index].replacement[i] ].tag == tag) {
-            printf("address found, updating cache\n");
+            //printf("address found, updating cache\n");
             // we found the address we were looking for!
             iplc_sim_LRU_update_on_hit( index, cache[index].replacement[i] );
-            print_cache();
+            //print_cache();
             hit = 1;
             return hit;
         }
 
-        printf("end of loop body\n");
+        //printf("end of loop body\n");
     }
 
-    printf("address not found, replacing cache\n");
-    fflush(stdout);
+    //printf("address not found, replacing cache\n");
     iplc_sim_LRU_replace_on_miss(index, tag);
-    print_cache();
+    //print_cache();
 
     /* expects you to return 1 for hit, 0 for miss */
     return hit;
@@ -466,10 +467,10 @@ void iplc_sim_push_pipeline_stage()
         unsigned int hitormiss, lwaddress;
         lwaddress = pipeline[MEM].instruction_address;
 
-        printf("About to call trap_address() from push_pipeline() with address %u or:\n", lwaddress);
-        print_b32(lwaddress);
+        //printf("About to call trap_address() from push_pipeline() with address %u or:\n", lwaddress);
+        //print_b32(lwaddress);
         hitormiss = iplc_sim_trap_address(lwaddress); // ** 1 for hit, 0 for miss
-        printf("Finished calling trap_address() from push_pipeline() \n\n");
+        //printf("Finished calling trap_address() from push_pipeline() \n\n");
 
         if (hitormiss == 0) {           // ** 10 clock cycle stall penalty if a miss
             inserted_nop += 10;
@@ -531,10 +532,10 @@ void iplc_sim_push_pipeline_stage()
         unsigned int hitormiss, swaddress;
         swaddress = pipeline[MEM].instruction_address;
 
-        printf("About to call trap_address() from push_pipeline() with address %u or:\n", swaddress);
-        print_b32(swaddress);
+        //printf("About to call trap_address() from push_pipeline() with address %u or:\n", swaddress);
+        //print_b32(swaddress);
         hitormiss = iplc_sim_trap_address(swaddress); // ** 1 for hit, 0 for miss
-        printf("Finished calling trap_address() from push_pipeline()\n\n");
+        //printf("Finished calling trap_address() from push_pipeline()\n\n");
 
         if (hitormiss == 0) {           // ** 10 clock cycle stall penalty if a miss
             pipeline_cycles += 10;
@@ -688,10 +689,10 @@ void iplc_sim_parse_instruction(char *buffer)
         exit(-1);
     }
     
-    printf("About to call trap_address() with address %u or:\n", instruction_address);
-    print_b32(instruction_address);
+    //printf("About to call trap_address() with address %u or:\n", instruction_address);
+    //print_b32(instruction_address);
     instruction_hit = iplc_sim_trap_address( instruction_address );
-    printf("Finished calling trap_address()\n\n");
+    //printf("Finished calling trap_address()\n\n");
 
     // if a MISS, then push current instruction thru pipeline
     if (!instruction_hit) {
@@ -836,17 +837,17 @@ int main()
     printf("Enter Branch Prediction: 0 (NOT taken), 1 (TAKEN): ");
     scanf("%d", &branch_predict_taken );
     
-    print_cache();
+    //print_cache();
 
     iplc_sim_init(index, blocksize, assoc);
     
     while (fgets(buffer, 80, trace_file) != NULL) {
         iplc_sim_parse_instruction(buffer);
-        printf("About to start dump_pipeline()\n");
         if (dump_pipeline)
             iplc_sim_dump_pipeline();
-        printf("Got past dump_pipeline()\n");
     }
+
+    print_cache();
     
     iplc_sim_finalize();
     return 0;
