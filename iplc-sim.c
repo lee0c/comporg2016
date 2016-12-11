@@ -133,6 +133,25 @@ enum pipeline_stages {FETCH, DECODE, ALU, MEM, WRITEBACK};
 
 pipeline_t pipeline[MAX_STAGES];
 
+
+void print_cache() {
+    unsigned int total_lines = 1 << cache_index;
+    int i, j;
+
+    for (i=0; i<total_lines; i++) {
+        printf("index: %d\n", i);
+        printf("\treplacement (MRU -> LRU): |");
+        for (j=cache_assoc-1; j>=0; j--) {
+            printf("%6d|", cache[i].replacement[j]);
+        }
+        printf("\n");
+        for (j=0; j<cache_assoc; j++) {
+            printf("\tblock: %d\n", j);
+            printf("\t\tvb:  %d\n", cache[i].assoc[j].vb);
+            printf("\t\ttag: %d\n", cache[i].assoc[j].tag);
+        }
+    }
+}
 /*
  * Extract the least significant bit from the value pointed to by bitbucket.
  * Remove this bit from the pointed-to value and return it.
@@ -305,22 +324,30 @@ int iplc_sim_trap_address(unsigned int address)
     tag = address & tag_mask;
     tag = tag >> (cache_blockoffsetbits);
 
+    printf("Tag: %d\nIndex: %d\n", tag, index);
+
     for (i=cache_assoc-1; i>=0; i++) {
+
         if (cache[index].assoc[ cache[index].replacement[i] ].vb == 0) {
+            printf("vb == 0, breaking loop\n");
             // since this block isn't valid, none of the less
             // recent blocks will be valid, and we can stop looking
             break;
         }
 
         if (cache[index].assoc[ cache[index].replacement[i] ].tag == tag) {
+            printf("address found, updating cache\n");
             // we found the address we were looking for!
             iplc_sim_LRU_update_on_hit( index, cache[index].replacement[i] );
+            print_cache();
             hit = 1;
             return hit;
         }
     }
 
+    printf("address not found, replacing cache\n");
     iplc_sim_LRU_replace_on_miss(index, tag);
+    print_cache();
 
     /* expects you to return 1 for hit, 0 for miss */
     return hit;
@@ -650,7 +677,7 @@ void iplc_sim_parse_instruction(char *buffer)
     printf("About to call trap_address() with address %u or:\n", instruction_address);
     print_b32(instruction_address);
     instruction_hit = iplc_sim_trap_address( instruction_address );
-    printf("Finished calling trap_address()\n");
+    printf("Finished calling trap_address()\n\n");
 
     // if a MISS, then push current instruction thru pipeline
     if (!instruction_hit) {
@@ -795,6 +822,8 @@ int main()
     printf("Enter Branch Prediction: 0 (NOT taken), 1 (TAKEN): ");
     scanf("%d", &branch_predict_taken );
     
+    print_cache();
+
     iplc_sim_init(index, blocksize, assoc);
     
     while (fgets(buffer, 80, trace_file) != NULL) {
