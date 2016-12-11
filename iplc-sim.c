@@ -313,16 +313,16 @@ int iplc_sim_trap_address(unsigned int address)
     unsigned int index_mask = 1;
     index_mask = index_mask << cache_index;
     index_mask = index_mask - 1;
-    index_mask = index_mask << (cache_blockoffsetbits - cache_index);
+    index_mask = index_mask << cache_blockoffsetbits;
     index = address & index_mask;
-    index = index >> (cache_blockoffsetbits - cache_index);
+    index = index >> cache_blockoffsetbits;
 
     unsigned int tag_mask = 1;
-    tag_mask = tag_mask << (32 - cache_blockoffsetbits);
+    tag_mask = tag_mask << (32 - cache_blockoffsetbits - cache_index);
     tag_mask = tag_mask - 1;
-    tag_mask = tag_mask << (cache_blockoffsetbits);
+    tag_mask = tag_mask << (cache_blockoffsetbits + cache_index);
     tag = address & tag_mask;
-    tag = tag >> (cache_blockoffsetbits);
+    tag = tag >> (cache_blockoffsetbits + cache_index);
 
     //printf("Tag: %u\nIndex: %u\n", tag, index);
 
@@ -438,6 +438,7 @@ void iplc_sim_push_pipeline_stage()
     /* 2. Check for BRANCH and correct/incorrect Branch Prediction */
     if (pipeline[DECODE].itype == BRANCH) {
         int branch_taken = 0;
+        branch_count+= 1;
 
         // ** if pipeline[FETCH].instruction_address is more than four away from
         // ** pipeline[DECODE].instruction_address, then branch was taken
@@ -452,7 +453,13 @@ void iplc_sim_push_pipeline_stage()
         // ** I'm not totally sure that it should be the same amount of delay for both cases
         if (branch_predict_taken != branch_taken) {
             pipeline_cycles += 1;
+                        //printf("\nbranch predict taken: %d\nbranch taken: %d\n\n", branch_predict_taken,branch_taken);
+
+        } else {
+            correct_branch_predictions += 1;
         }
+
+
 
         
     }
@@ -492,7 +499,10 @@ void iplc_sim_push_pipeline_stage()
                 printf("DEBUG: LW STALL due to use in ALU stage with data MISS at instruction 0x%x\n",
                    pipeline[MEM].instruction_address);
 
-                inserted_nop += 1;
+                if (hitormiss == 1) {
+                    inserted_nop += 1;
+                }
+                
             }
 
         // ** If the instruction at the ALU stage is SW
@@ -504,7 +514,9 @@ void iplc_sim_push_pipeline_stage()
                 printf("DEBUG: LW STALL due to use in ALU stage with data MISS at instruction 0x%x\n",
                    pipeline[MEM].instruction_address);
 
-                inserted_nop += 1;
+                 if (hitormiss == 1) {
+                    inserted_nop += 1;
+                }
             }
 
         // ** If the instruction at the ALU stage is SW
@@ -518,7 +530,9 @@ void iplc_sim_push_pipeline_stage()
                 printf("DEBUG: LW STALL due to use in ALU stage with data MISS at instruction 0x%x\n",
                    pipeline[MEM].instruction_address);
 
-                inserted_nop += 1;
+                 if (hitormiss == 1) {
+                    inserted_nop += 1;
+                }
             }
         }
      
