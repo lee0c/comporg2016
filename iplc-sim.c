@@ -694,6 +694,8 @@ unsigned int iplc_sim_parse_reg(char *reg_str)
  */
 void iplc_sim_parse_instruction(char *buffer)
 {
+        instruction_count++;  
+ 
     int instruction_hit = 0;
     int i=0, j=0;
     int src_reg=0;
