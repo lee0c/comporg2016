@@ -287,6 +287,7 @@ void iplc_sim_LRU_update_on_hit(int index, int assoc)
  */
 int iplc_sim_trap_address(unsigned int address)
 {
+    cache_access += 1;
     unsigned int i=0, index=0;
     unsigned int tag=0;
     int hit=0;
@@ -326,10 +327,12 @@ int iplc_sim_trap_address(unsigned int address)
 
     //printf("Tag: %u\nIndex: %u\n", tag, index);
 
-    for (i=cache_assoc-1; i>0; i--) {
+    for (i=cache_assoc-1; i>=0; i--) {
 
         //printf("FOR LOOPS DON'T WORK\n");
-
+        if (i == -1){
+            break;
+        }
         //printf("i=%u\nreplacement[i]=%u\n", i, cache[index].replacement[i]);
 
         if (cache[index].assoc[ cache[index].replacement[i] ].vb == 0) {
@@ -345,13 +348,16 @@ int iplc_sim_trap_address(unsigned int address)
             iplc_sim_LRU_update_on_hit( index, cache[index].replacement[i] );
             //print_cache();
             hit = 1;
+            cache_hit += 1;
             return hit;
         }
+
 
         //printf("end of loop body\n");
     }
 
     //printf("address not found, replacing cache\n");
+    cache_miss += 1;
     iplc_sim_LRU_replace_on_miss(index, tag);
     //print_cache();
 
